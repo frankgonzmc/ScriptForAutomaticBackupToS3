@@ -74,10 +74,17 @@ resource "aws_instance" "instance" {
     subnet_id = aws_subnet.subnet_public_myvpc.id
     vpc_security_group_ids = [aws_security_group.ec2_sg.id]
     user_data = <<-EOF
+                    !#/bin/bash
                     sudo apt-get update -y
+                    mkdir -p cont
+                    echo "Esto es un ejemplo" > /home/ubuntu/cont/file.txt
                 EOF
     key_name = aws_key_pair.mykey.key_name
     tags = {
         Name = "My instance"
     }
+}
+
+resource "aws_s3" "bucket_backup" {
+
 }
