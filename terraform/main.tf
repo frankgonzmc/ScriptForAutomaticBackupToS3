@@ -71,7 +71,7 @@ resource "aws_security_group" "ec2_sg"{
 #IAM ROLE AND ACCESS FROM EC2
 resource "aws_iam_role" "ec2_role"{
     name = "ec2_backup_role"
-    assume_role_policy = jsondecode ({
+    assume_role_policy = jsonencode ({
         Version = "2012-10.17"
         Statement = [{
             Effect = "Allow",
@@ -101,7 +101,7 @@ resource "aws_instance" "instance" {
     vpc_security_group_ids = [aws_security_group.ec2_sg.id]
     iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
     user_data = <<-EOF
-                    !#/bin/bash
+                    #!/bin/bash
                     sudo apt-get update -y
                     mkdir -p cont
                     echo "Esto es un ejemplo" > /home/ubuntu/cont/file.txt
@@ -122,6 +122,48 @@ resource "aws_instance" "instance" {
     }
 }
 
-resource "aws_s3" "bucket_backup" {
+resource "aws_s3_bucket" "backup_bucket" {
+    bucket = "my_bucket_34436546326346" #Unique name
+    force_destroy = true #True =  Delete all object inside of bucket
+}
 
+#Get data of the current account
+data "aws_caller_identity" "current"{}
+
+#Allow public read to * and write permission to EC2
+resource "aws_s3_bucket_policy" "backup_policy" {
+    bucket = aws_s3_bucket.backup_bucket.id
+    policy = jsonencode({
+        Version = "2012-10-17",
+        Statement = [
+            {
+                Sid: "PublicReadGetObject",
+                Effect: "Allow",
+                Principal: "*",
+                Action: "s3:GetObject",
+                Resource: "${aws_s3_bucket.backup_bucket.arn}/*"
+            },
+            {
+                sid: "AllowEC2Write",
+                Effect: "Allow",
+                Principal: {
+                    AWS: "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${aws_iam_role.ec2_role.name}"
+                },
+                Action: [
+                    "s3:PutObject",
+                    "s3:PutObjectAcl"
+                ],
+                Resource: "${aws_s3_bucket.backup_bucket.arn}/*" 
+            }
+        ]
+    })
+}
+
+#Allow public access to my bucket
+resource "aws_s3_bucket_public_access_block" "allow_public"{
+    bucket = aws_s3_bucket.backup_bucket.id
+    block_public_acls = false #Allow public ACLs
+    block_public_policy = false #Allow apply a public policy
+    ignore_public_acls = false #Apply public ACLs
+    restrict_public_buckets = false #Don't block public access even there's a policy stoping
 }
